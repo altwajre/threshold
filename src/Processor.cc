@@ -25,6 +25,7 @@ using namespace omnetpp;
 
 class NeighbourStat {
  public:
+  int address;
   uint64_t count{0};
 };
 
@@ -68,6 +69,18 @@ void Processor::initialize() {
   thresholdInterval = par("thresholdInterval");
   thresholdMsg = new cMessage("thresholdMsg");
 
+  // Initialise neighbours
+  int inBase = gateBaseId("in");
+  int inCount = gateSize("in");
+  for (int i = inBase; i < (inBase + inCount); i++) {
+    cGate *g = gate(i);
+    neighbourStats[i].address =
+        static_cast<cSimpleModule *>(
+            g->getPathStartGate()->getOwner()->getOwner())
+            ->par("address")
+            .intValue();
+  }
+
   scheduleAt(thresholdInterval, thresholdMsg);
 }
 
@@ -91,21 +104,17 @@ void Processor::doThreshold() {
     double ratio = ((double)el.second.count) / sum;
     if (ratio > 0.67) {
       neighboursThresholded.insert(el.first);
-      emit(sigNeighbourThresholded,
-           static_cast<cSimpleModule *>(
-               gate(el.first)->getPathStartGate()->getOwner()->getOwner())
-               ->par("address")
-               .intValue());
+      emit(sigNeighbourThresholded, el.second.address);
     }
     el.second.count = 0;
   }
 
   for (auto const &el : neighboursThresholded) {
-    EV << static_cast<cSimpleModule *>(
-              gate(el)->getPathStartGate()->getOwner()->getOwner())
-              ->par("address")
-              .intValue()
-       << ", ";
+    EV << neighbourStats[el].address << ", ";
+  }
+
+  if (neighboursThresholded.size() == 0) {
+    EV << " none";
   }
   EV << endl;
 }
